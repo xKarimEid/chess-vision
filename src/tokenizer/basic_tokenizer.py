@@ -7,7 +7,7 @@ import numpy as np
 
 # All possible characters in a fen, adding '.' for padding purposes
 STOI = '. -/12345678BKNPQRbknpqrw'
-CONTEXT_SIZE = 71
+CONTEXT_SIZE = 68
 
 class BasicTokenizer:
     """
@@ -30,7 +30,7 @@ class BasicTokenizer:
         # Convert chars to integers
         ids = [self.stoi[char] for char in fen_part]
         # Padds to a constand length
-        padd_length = 71 - len(ids)
+        padd_length = CONTEXT_SIZE - len(ids)
         padded = [0 for _ in range(padd_length)]
         # Add the paddings to the actual integers
         padded.extend(ids)

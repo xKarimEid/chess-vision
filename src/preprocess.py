@@ -8,11 +8,12 @@ from datasets import load_dataset
 from tokenizer.basic_tokenizer import BasicTokenizer, CONTEXT_SIZE
 
 # Global variables
-TOTAL_SIZE = 1e6 # 10MB * 65 = 650 MB
+TOTAL_SIZE = 1e7 # 10MB * 65 = 650 MB
 TOT_ARR_LEN = int(TOTAL_SIZE/2) # each entry takes up two bytes (np.16int)
 TEST_SIZE = 0.05 # Size of test data
+N_BINS = 64 # Used for bucketing percentages
 
-def preprocess_scores(scores):
+def convert_scores_percentages(scores):
     """
     Convert scores to winning percentages
     """
@@ -27,6 +28,17 @@ def preprocess_scores(scores):
 
     return winning_percentages
 
+def bin_percentages(percentages):
+    """
+    Describe the binning
+    """
+
+    boundaries = np.linspace(0, 100, N_BINS)
+    # Substract one to make buckets start from 0
+    buckets = np.digitize(percentages, boundaries) - 1
+
+    return buckets
+
 
 def preprocess(game):
     """
@@ -36,9 +48,11 @@ def preprocess(game):
     # Encode fens to integers
     ids = encoder.encode(game['fens'])
     # Convert scores to winning percentages
-    winning_percentages = preprocess_scores(game['scores'])
+    winning_percentages = convert_scores_percentages(game['scores'])
+    # Bin the percentages to buckets
+    buckets = bin_percentages(winning_percentages)
     # Gather ids and percentages in dictionary
-    out = {'ids': ids, 'win_percentages': winning_percentages}
+    out = {'ids': ids, 'win_percentages': buckets}
 
     return out
 
@@ -63,7 +77,7 @@ if __name__ == "__main__":
              )
 
         # Creating memory mapped array at filepath
-        ids_arr = np.memmap(encodings_path, dtype=np.uint16, mode='w+', shape=(arr_len, CONTEXT_SIZE))
+        ids_arr = np.memmap(encodings_path, dtype=np.uint8, mode='w+', shape=(arr_len, CONTEXT_SIZE))
 
         # Creating winning percentages filepath
         scores_path = os.path.join(
@@ -71,7 +85,7 @@ if __name__ == "__main__":
              )
 
         # Creating memory mapped array at filepath
-        percentages_arr = np.memmap(scores_path, dtype=np.float16, mode='w+', shape=(arr_len,))
+        percentages_arr = np.memmap(scores_path, dtype=np.uint8, mode='w+', shape=(arr_len,))
 
         # Keep track of the indices
         write_idx = 0
@@ -84,7 +98,6 @@ if __name__ == "__main__":
 
             # Number of positions in new batch, this varies from game to game
             B = len(batch_ids)
-            print(B)
 
             # If the new batch does not fit into the allocated space
             if write_idx + B >= arr_len:
