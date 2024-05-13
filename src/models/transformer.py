@@ -1,148 +1,137 @@
 """
-Add docstring
+A transformer architecture implementation with prenorm layers
+It is not adviced to train this model on a cpu. I used an A100 gpu
 """
+
+import math
 
 import torch
 from torch import nn
 import torch.nn.functional as F
 
-# Global params
-N_EMBED = 32
-HEAD_SIZE = 8
-N_HEADS = 4
+from tokenizer.basic_tokenizer import CONTEXT_SIZE
+
+
+# Global variables
+N_EMBED = 512
+HEAD_SIZE = 32
+N_HEADS = 16
 N_CHARS = 25
 N_BINS = 64
-N_BLOCKS = 4
+N_BLOCKS = 8
 DROPOUT = 0.05
-CONTEXT_SIZE = 68
 
+# Configure to use gpu if available
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-class AttentionHead(nn.Module):
+class NewGELU(nn.Module):
     """
-    Add description here
+    The GELU activation function, as applied in the Google BERT repository.
+    For further details, please refer to the Gaussian Error Linear Units (GELU) 
+    paper at https://arxiv.org/abs/1606.08415
     """
-
-    def __init__(self):
-        super().__init__()
-        self.q = nn.Linear(N_EMBED, HEAD_SIZE, bias = False)
-        self.k = nn.Linear(N_EMBED, HEAD_SIZE, bias = False)
-        self.v = nn.Linear(N_EMBED, HEAD_SIZE, bias = False)
-        #self.dropout = nn.Dropout(DROPOUT)
 
     def forward(self, x):
-        """
-        Add description here
-        """
-
-        B, T, C = x.shape
-        queries = self.q(x) # (B, T, HEAD_SIZE)
-        keys = self.k(x) # (B, T, HEAD_SIZE)
-        values = self.v(x) # (B, T, HEAD_SIZE)
-
-        # The communication between the nodes
-        wei = keys @ queries.transpose(-2, -1) * C**-0.5 # (B, T, T)
-        wei = F.softmax(wei, dim = -1) # (B, T, T)
-        #wei = self.dropout(wei)
-
-        out = wei @ values # (B, T, HEAD_SIZE)
-        return out
+        return 0.5 * x * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * torch.pow(x, 3.0))))
 
 class MultiHeadAttention(nn.Module):
     """
-    Add docstring
+    Implementation of batched multihead attention to fully utilize
+    gpu.
     """
 
     def __init__(self):
         super().__init__()
-        assert N_EMBED == N_HEADS * HEAD_SIZE
-        self.sa_heads = nn.ModuleList([AttentionHead() for _ in range(N_HEADS)])
-        self.proj = nn.Linear(N_EMBED, N_EMBED, bias = True)
-        #self.dropout = nn.Dropout(DROPOUT)
+        self.attn = nn.Linear(N_EMBED, 3 * N_EMBED)
+        self.proj = nn.Linear(N_EMBED, N_EMBED)
 
     def forward(self, x):
         """
-        Add description here
-        """
-        x = torch.cat([h(x) for h in self.sa_heads], dim=-1)
-        x = self.proj(x)
-        return x
-
-class FFWD(nn.Module):
-    """
-    Add docstring
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(N_EMBED, N_EMBED*4, bias = True),
-            nn.ReLU(),
-            nn.Linear(N_EMBED*4, N_EMBED, bias = True),
-            #nn.Dropout(DROPOUT)
-            )
-
-    def forward(self, x):
-        """
-        Add docs
+        calculate query, key, values for all heads in batch and move head 
+        forward to be the batch dim Split the result to three vectors 
+        each having N_EMBED channels
         """
 
-        return self.net(x)
+        B, T, C = x.size()
+
+        q, k ,v  = self.attn(x).split(N_EMBED, dim=2)
+        k = k.view(B, T, N_HEADS, C // N_HEADS).transpose(1, 2) # (B, nh, T, hs)
+        q = q.view(B, T, N_HEADS, C // N_HEADS).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, N_HEADS, C // N_HEADS).transpose(1, 2) # (B, nh, T, hs)
+
+        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        att = F.softmax(att, dim=-1)
+
+        y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+
+        y = self.proj(y)
+
+        return y
 
 class Block(nn.Module):
-    """
-    Add docstring
-    """
-
     def __init__(self):
         super().__init__()
-        self.mh_attention = MultiHeadAttention()
-        self.ln1 = nn.LayerNorm(N_EMBED)
-        self.ffwd = FFWD()
-        self.ln2 = nn.LayerNorm(N_EMBED)
+        self.ln_1 = nn.LayerNorm(N_EMBED)
+        self.attn = MultiHeadAttention()
+        self.ln_2 = nn.LayerNorm(N_EMBED)
+        self.mlp = nn.ModuleDict(dict(
+            c_fc    = nn.Linear(N_EMBED, 4 * N_EMBED),
+            c_proj  = nn.Linear(4 * N_EMBED, N_EMBED),
+            act     = NewGELU(),
+            ))
+        m = self.mlp
+        self.mlpf = lambda x: m.c_proj(m.act(m.c_fc(x))) # MLP forward
 
     def forward(self, x):
-        """
-        Add doc
-        """
-        x = self.mh_attention(self.ln1(x)) + x
-        x = self.ffwd(self.ln2(x)) + x
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlpf(self.ln_2(x))
         return x
 
-class Network(nn.Module):
-    """
-    Add docstring
-    """
+class ModelHead(nn.Module):
     def __init__(self):
         super().__init__()
-        # Chess piece embedding
-        self.embed = nn.Embedding(N_CHARS, N_EMBED)
-        # Chess squares embedding
-        self.positional_embedding = nn.Embedding(CONTEXT_SIZE, N_EMBED)
-        # Self Attention
-        self.blocks = nn.Sequential(*[Block() for _ in range(N_BLOCKS)])
-        # Flatten out to stretch the rows to all channels for all T
-        self.flatten = nn.Flatten(start_dim = 1)
-        self.ln = nn.LayerNorm(CONTEXT_SIZE*N_EMBED)
-        self.head = nn.Linear(CONTEXT_SIZE*N_EMBED, N_BINS)
+        self.head = nn.ModuleDict(dict(
+            h1 = nn.Linear(N_EMBED, N_EMBED),
+            act = NewGELU(),
+            h2 = nn.Linear(N_EMBED, N_BINS, bias = False)
+        ))
 
-    def forward(self, x, targets = None):
-        """
-        Add docstring
-        """
-        # x is (B, T)
-        piece_embed = self.embed(x) # (B, T, N_EMBED)
-        positional_embed = self.positional_embedding(torch.arange(CONTEXT_SIZE, device = device))
-        # Adding together piece embedding and positional embedding
-        x = piece_embed + positional_embed # (B, T, N_EMBED)
-        x = self.blocks(x) # (B, T, HEAD_SIZE)
-        x = self.flatten(x) # (B, T*HEAD_SIZE)
-        x = self.ln(x)
-        logits = self.head(x) # (B, N_BINS)
+    def forward(self, x):
+        x = self.head.act(self.head.h1(x))
+        x = self.head.h2(x.mean(dim = 1))
+        return x
 
+
+class Network(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.transformer = nn.ModuleDict(dict(
+                wte = nn.Embedding(N_CHARS, N_EMBED),
+                wpe = nn.Embedding(CONTEXT_SIZE, N_EMBED),
+                h = nn.ModuleList([Block() for _ in range(N_BLOCKS)]),
+                ln_f = nn.LayerNorm(N_EMBED),
+            ))
+        self.lm_head = ModelHead()
+
+    def forward(self, x, targets):
+        B, T = x.size()
+        pos = torch.arange(0, T, dtype=torch.long, device=device).unsqueeze(0) # shape (1, T)
+        # forward the GPT model itself
+        tok_emb = self.transformer.wte(x) # token embeddings of shape (b, t, n_embd)
+        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
+        x = tok_emb + pos_emb
+
+        for block in self.transformer.h:
+            x = block(x)
+        x = self.transformer.ln_f(x)
+        logits = self.lm_head(x)
+
+        # if we are given some desired targets also calculate the loss
         loss = None
-
         if targets is not None:
             loss = F.cross_entropy(logits, targets)
 
