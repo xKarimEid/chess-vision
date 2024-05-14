@@ -1,6 +1,5 @@
 """
-A transformer architecture implementation with prenorm layers
-It is not adviced to train this model on a cpu. I used an A100 gpu
+An encoder only transformer implementation with prenorm layers
 """
 
 import math
@@ -38,7 +37,7 @@ class NewGELU(nn.Module):
 class MultiHeadAttention(nn.Module):
     """
     Implementation of batched multihead attention to fully utilize
-    gpu.
+    gpu
     """
 
     def __init__(self):
@@ -72,6 +71,11 @@ class MultiHeadAttention(nn.Module):
         return y
 
 class Block(nn.Module):
+    """
+    Implementation of a decoder block. The block contains layer norm, self attention,
+    and a multilayer perceptron
+    """
+
     def __init__(self):
         super().__init__()
         self.ln_1 = nn.LayerNorm(N_EMBED)
@@ -91,6 +95,12 @@ class Block(nn.Module):
         return x
 
 class ModelHead(nn.Module):
+    """
+    A MLP network mounted on the head of the transformer.
+    Transforms a (B, T, C) tensor to (B, N_BINS) by pooling along 
+    the T dimension
+    """
+
     def __init__(self):
         super().__init__()
         self.head = nn.ModuleDict(dict(
@@ -100,12 +110,19 @@ class ModelHead(nn.Module):
         ))
 
     def forward(self, x):
-        x = self.head.act(self.head.h1(x))
-        x = self.head.h2(x.mean(dim = 1))
+        x = self.head.act(self.head.h1(x)) # B, T, C
+        # Calculates the channel means and forwards to the final layer
+        x = self.head.h2(x.mean(dim = 1)) # B, N_BINS
+
         return x
 
 
 class Network(nn.Module):
+    """
+    Putting together the modules creating a sequence classifier
+    using encoder architecture utilizing self attention
+    """
+
     def __init__(self):
         super().__init__()
 
@@ -120,7 +137,7 @@ class Network(nn.Module):
     def forward(self, x, targets):
         B, T = x.size()
         pos = torch.arange(0, T, dtype=torch.long, device=device).unsqueeze(0) # shape (1, T)
-        # forward the GPT model itself
+
         tok_emb = self.transformer.wte(x) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
         x = tok_emb + pos_emb
