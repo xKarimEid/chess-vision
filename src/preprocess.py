@@ -117,4 +117,3 @@ if __name__ == "__main__":
                 print(write_idx, (write_idx/arr_len)*100)
 
             i += 1
-

@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from tokenizer.basic_tokenizer import CONTEXT_SIZE
-from models.feedforward import FeedForward
+from models.transformer import Network
 
 
 
@@ -44,7 +44,3 @@ def get_batch(split):
     x, y = torch.from_numpy(x[ix].astype(np.int32)), torch.from_numpy(y[ix].astype(np.int32))
 
     return x.to(device), x.to(device)
-
-for _ in range(100):
-    x, y = get_batch('train')
-    print("done")
