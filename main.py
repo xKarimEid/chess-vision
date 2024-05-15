@@ -1,10 +1,10 @@
 """
+This script is not done yet
 """
 
-import os 
-import torch 
+import os
+import torch
 from src.models.transformer import Network
-
 
 
 model_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'chess-vision/src/trained_models/model.pkl')

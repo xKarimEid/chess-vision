@@ -1,5 +1,8 @@
 """
-An encoder only transformer implementation with prenorm layers
+A PyTorch implementation of a sequence classifier using 
+an encoder architecture with self-attention.
+
+This implementation is optimized for gpu usages.
 """
 
 import math

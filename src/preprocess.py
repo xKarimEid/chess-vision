@@ -1,5 +1,6 @@
 """
-Downloads and preprocesses training/test data
+Downloads and preprocesses training/test data from huggingface.
+The dataset can be found here: https://huggingface.co/datasets/mauricett/lichess_sf
 """
 
 import os

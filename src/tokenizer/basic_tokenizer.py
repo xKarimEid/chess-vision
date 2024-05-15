@@ -7,6 +7,8 @@ import numpy as np
 
 # All possible characters in a fen, adding '.' for padding purposes
 STOI = '. -/12345678BKNPQRbknpqrw'
+# The maximum possible length of a FEN string
+# excluding castling/move information
 CONTEXT_SIZE = 68
 
 class BasicTokenizer:
