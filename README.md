@@ -4,6 +4,8 @@ Train and benchmark a neural network model for ranking chess positions from winn
 
 Link to the data used for training the model: [Lichess Stockfish Data](https://huggingface.co/datasets/mauricett/lichess_sf). The data contains chess positions in FEN notation and their evaluation in centipawns. In the preprocessing step, the evaluation is converted to winning percentage as explained here: [Lichess Accuracy](https://lichess.org/page/accuracy). The winning percentage is then binned as is done in the DeepMind paper: [DeepMind Paper](https://arxiv.org/abs/2402.04494).
 
+Note: This implementaion is optimized for gpu and it is not advisable to run this on a CPU.
+
 ## Steps
 
 1. First, create a virtual environment and install the prerequisites found in the `requirements.txt` file.
