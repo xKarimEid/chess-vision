@@ -9,17 +9,17 @@ Link to the data used for training the model: [Lichess Stockfish Data](https://h
 1. First, create a virtual environment and install the prerequisites found in the `requirements.txt` file.
    
    ```sh
-   $ python -m venv venv
-   $ source venv/bin/activate   # On Windows use `venv\Scripts\activate`
-   $ pip install -r requirements.txt
+   python -m venv venv
+   source venv/bin/activate   # On Windows use `venv\Scripts\activate`
+   pip install -r requirements.txt
 
 2. Download and preprocess data from huggingface by running the following command
     ```sh
-    $ python preprocess.py
+    python preprocess.py
 
 3. Train the model and save the weights by running train.py
     ```sh
-    $ python train.py
+    python train.py
 
 
 After training the model and saving its weights you need to wrap it in a chess engine. My chess-engine repo shows how you can do that. Then you can play against it by following my chess-ui repo.
