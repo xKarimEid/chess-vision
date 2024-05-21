@@ -2,7 +2,7 @@
 A PyTorch implementation of a sequence classifier using 
 an encoder architecture with self-attention.
 
-This implementation is optimized for gpu usages.
+This implementation is optimized for gpu device.
 """
 
 import math
@@ -11,7 +11,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from tokenizer.basic_tokenizer import CONTEXT_SIZE
+from src.tokenizer.basic_tokenizer import CONTEXT_SIZE
 
 
 # Global variables
@@ -138,6 +138,12 @@ class Network(nn.Module):
         self.lm_head = ModelHead()
 
     def forward(self, x, targets):
+        """
+        Extract embeddings for positions and tokens, forward
+        them through encoder blocks and finally through
+        a model head
+        """
+
         B, T = x.size()
         pos = torch.arange(0, T, dtype=torch.long, device=device).unsqueeze(0) # shape (1, T)
 
@@ -152,6 +158,7 @@ class Network(nn.Module):
 
         # if we are given some desired targets also calculate the loss
         loss = None
+
         if targets is not None:
             loss = F.cross_entropy(logits, targets)
 
