@@ -4,3 +4,4 @@ test_ids.bin
 test_percentages.bin
 train_ids.bin
 train_percentages.bin
+model.pkl

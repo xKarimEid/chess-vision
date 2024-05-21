@@ -20,7 +20,7 @@ BATCH_SIZE = 32
 # Directory where data is stored
 data_dir = "data"
 # Directory where model weights will be saved
-model_dir = 'src/trained_models/m1.pkl'
+model_dir = 'src/trained_models/model.pkl'
 # Set the correct device
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -108,5 +108,7 @@ def train_loop(model):
                 print(f"writing new weights to disk with loss {min_test}")
 
 if __name__ == '__main__':
+    # Initialize the transformer network
     model = Network()
+    # Train and save the model
     train_loop(model)
